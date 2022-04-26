@@ -1,0 +1,482 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+unsigned char I[480][640]; // temporary image storage 1
+unsigned char II[480][640]; // temporary image storage 2
+unsigned char III[480][640]; // temporary image storage 3
+
+
+int hysteresis(int row, int column){
+	if (I[column-1][row-1] !=0 && I[column+1][row+1] != 0)	//slash '\'
+		return 255;
+	else if (I[column+1][row-1] != 0 && I[column-1][row+1] != 0)	//slash '/'
+		return 255;
+	else if (I[column][row-1] != 0 && I[column][row+1] != 0)	// '-'
+		return 255;
+	else if (I[column-1][row] != 0 && I[column+1][row] != 0)	// '|'
+		return 255;
+	else 
+		return 0;
+}
+
+int nms(int row, int column){
+	int m, n, sum=0;
+	for (m=-1;m<2;m++)
+	{
+	for (n=-1;n<2;n++)
+	{
+		sum += II[column+m][row+n];
+	}
+	}
+	sum /= 9;
+	if (II[column][row]>sum)
+		return II[column][row];
+	else 
+		return 0;
+}
+
+
+void canny(){
+	FILE *fp = fopen ("/home/kenny/Desktop/data/sobel_1.bmp","rb");
+	FILE *fo = fopen ("/home/kenny/Desktop/data/final_1.bmp","wb");
+	if (!fp || !fo)
+	{
+		printf("File error.\n");
+	}
+	printf("Hysteresis.\n");
+	unsigned char header [54];
+	fread (header, sizeof(unsigned char), 54, fp);
+	fwrite (header, sizeof(unsigned char), 54, fo);
+	unsigned int width =  *(int*)&header[18];
+	unsigned int height = *(int*)&header[22];
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+	printf("width = %d\n",width);
+	//////Non-Maximun Supression && Hysteresis Thresholding//////
+	unsigned char pixel[3];
+	unsigned char buf[1];
+	buf[0] = 0;
+	int i, j, n, th=20, tl=15;
+	
+	for (i=0;i<640;i++)
+	{
+		fwrite(&buf, 3, 1, fo);
+	}
+
+
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		n = nms(i,j);
+		if (n < tl)
+			n = 0;
+		else if (n > th)
+			n = 255;
+		else 
+			n = hysteresis(i, j);
+		memset(pixel, n , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+//		III[j][i] = n;
+
+	}
+        fread(pixel, padding, 1, fp);
+        fwrite(pixel, padding, 1, fo);
+	}
+/////
+/*
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		n = hysteresis2(i, j);
+		memset(pixel, n , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+	}
+        fread(pixel, padding, 1, fp);
+        fwrite(pixel, padding, 1, fo);
+	}*/
+
+    fclose(fp);
+    fclose(fo);
+}
+
+
+
+
+int convolution(int kernel[3][3], int row, int column){
+	int m, n, sum=0;
+	for (m=-1;m<2;m++)
+	{
+	for (n=-1;n<2;n++)
+	{
+		sum += kernel[m+1][n+1]*I[column+m][row+n];
+	}
+	}
+	return sum;
+}
+
+
+void sobel(){
+	FILE *fp = fopen ("/home/kenny/Desktop/data/gray1.bmp","rb");
+	FILE *fo = fopen ("/home/kenny/Desktop/data/sobel_1.bmp","wb");
+	if (!fp || !fo)
+	{
+		printf("File error.\n");
+	}
+	printf("sobel.\n");
+	unsigned char header [54];
+	fread (header, sizeof(unsigned char), 54, fp);
+	fwrite (header, sizeof(unsigned char), 54, fo);
+	unsigned int width =  *(int*)&header[18];
+	unsigned int height = *(int*)&header[22];
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+	printf("width = %d\n",width);
+
+	//////convoltion//////
+	int xkernel[3][3] = {{-1, 0, 1},{-2, 0, 2},{-1, 0, 1}};
+	int ykernel[3][3] = {{-1, -2, -1},{0, 0, 0},{1, 2, 1}};
+	int gkernel[3][3] = {{1,2,1},{2,4,2},{1,2,1}};
+	int i, j, gx, gy, gau;
+	unsigned char pixel[3];
+	unsigned char buf[1];
+	buf[0] = 0;
+	
+// gaussian filter
+	for (j=1;j<height-1;j++)
+	{
+	for (i=0;i<width-1;i++)
+	{
+		gau = convolution(gkernel,i,j)/16;
+		I[j][i] = gau;
+	}
+	}
+
+// sobel edge detection
+
+
+	for (i=0;i<640;i++)
+	{
+		fwrite(&buf, 3, 1, fo);
+	}
+
+
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		//gau = convolution(gkernel,i,j)/16;
+
+		gx = convolution(xkernel,i,j);
+		gy = convolution(ykernel,i,j);
+		II[j][i] = abs(gx)+abs(gy);
+		memset(pixel, abs(gx)+abs(gy) , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+	}
+        fread(pixel, padding, 1, fp);
+        //fwrite(pixel, padding, 1, fo);
+	}
+    fclose(fp);
+    fclose(fo);
+
+}
+
+
+int main(){
+	double time = clock();
+    FILE *fIn = fopen("/home/kenny/Desktop/data/1.bmp", "rb");
+    FILE *fOut = fopen("/home/kenny/Desktop/data/gray1.bmp", "wb");
+	FILE *fd = fopen("/home/kenny/Desktop/data/raw.txt","wb");
+    if (!fIn || !fOut)
+    {
+        printf("File error.\n");
+        return 0;
+    }
+
+    unsigned char header[54];
+    fread(header, sizeof(unsigned char), 54, fIn);
+    fwrite(header, sizeof(unsigned char), 54, fOut);
+
+    int width = *(int*)&header[18];
+    int height = abs(*(int*)&header[22]);
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+
+    printf("width: %d (%d)\n", width, width * 3);
+    printf("height: %d\n", height);
+	printf("stride: %d\n",stride);
+	printf("padding: %d\n",padding);
+	//unsigned int I[width][height];
+    unsigned char pixel[3];
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            fread(pixel, 3, 1, fIn);
+            unsigned char gray = pixel[0] * 0.3 + pixel[1] * 0.58 + pixel[2] * 0.11;
+	    	I[y][x] = gray;
+			fprintf(fd,"%d ",gray);
+            memset(pixel, gray, sizeof(pixel));#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+unsigned char I[480][640]; // temporary image storage 1
+unsigned char II[480][640]; // temporary image storage 2
+unsigned char III[480][640]; // temporary image storage 3
+
+
+int hysteresis(int row, int column){
+	if (I[column-1][row-1] !=0 && I[column+1][row+1] != 0)	//slash '\'
+		return 255;
+	else if (I[column+1][row-1] != 0 && I[column-1][row+1] != 0)	//slash '/'
+		return 255;
+	else if (I[column][row-1] != 0 && I[column][row+1] != 0)	// '-'
+		return 255;
+	else if (I[column-1][row] != 0 && I[column+1][row] != 0)	// '|'
+		return 255;
+	else 
+		return 0;
+}
+
+int nms(int row, int column){
+	int m, n, sum=0;
+	for (m=-1;m<2;m++)
+	{
+	for (n=-1;n<2;n++)
+	{
+		sum += II[column+m][row+n];
+	}
+	}
+	sum /= 9;
+	if (II[column][row]>sum)
+		return II[column][row];
+	else 
+		return 0;
+}
+
+
+void canny(){
+	FILE *fp = fopen ("/home/kenny/Desktop/data/sobel_1.bmp","rb");
+	FILE *fo = fopen ("/home/kenny/Desktop/data/final_1.bmp","wb");
+	if (!fp || !fo)
+	{
+		printf("File error.\n");
+	}
+	printf("Hysteresis.\n");
+	unsigned char header [54];
+	fread (header, sizeof(unsigned char), 54, fp);
+	fwrite (header, sizeof(unsigned char), 54, fo);
+	unsigned int width =  *(int*)&header[18];
+	unsigned int height = *(int*)&header[22];
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+	printf("width = %d\n",width);
+	//////Non-Maximun Supression && Hysteresis Thresholding//////
+	unsigned char pixel[3];
+	unsigned char buf[1];
+	buf[0] = 0;
+	int i, j, n, th=20, tl=15;
+	
+	for (i=0;i<640;i++)
+	{
+		fwrite(&buf, 3, 1, fo);
+	}
+
+
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		n = nms(i,j);
+		if (n < tl)
+			n = 0;
+		else if (n > th)
+			n = 255;
+		else 
+			n = hysteresis(i, j);
+		memset(pixel, n , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+//		III[j][i] = n;
+
+	}
+        fread(pixel, padding, 1, fp);
+        fwrite(pixel, padding, 1, fo);
+	}
+/////
+/*
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		n = hysteresis2(i, j);
+		memset(pixel, n , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+	}
+        fread(pixel, padding, 1, fp);
+        fwrite(pixel, padding, 1, fo);
+	}*/
+
+    fclose(fp);
+    fclose(fo);
+}
+
+
+
+
+int convolution(int kernel[3][3], int row, int column){
+	int m, n, sum=0;
+	for (m=-1;m<2;m++)
+	{
+	for (n=-1;n<2;n++)
+	{
+		sum += kernel[m+1][n+1]*I[column+m][row+n];
+	}
+	}
+	return sum;
+}
+
+
+void sobel(){
+	FILE *fp = fopen ("/home/kenny/Desktop/data/gray1.bmp","rb");
+	FILE *fo = fopen ("/home/kenny/Desktop/data/sobel_1.bmp","wb");
+	if (!fp || !fo)
+	{
+		printf("File error.\n");
+	}
+	printf("sobel.\n");
+	unsigned char header [54];
+	fread (header, sizeof(unsigned char), 54, fp);
+	fwrite (header, sizeof(unsigned char), 54, fo);
+	unsigned int width =  *(int*)&header[18];
+	unsigned int height = *(int*)&header[22];
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+	printf("width = %d\n",width);
+
+	//////convoltion//////
+	int xkernel[3][3] = {{-1, 0, 1},{-2, 0, 2},{-1, 0, 1}};
+	int ykernel[3][3] = {{-1, -2, -1},{0, 0, 0},{1, 2, 1}};
+	int gkernel[3][3] = {{1,2,1},{2,4,2},{1,2,1}};
+	int i, j, gx, gy, gau;
+	unsigned char pixel[3];
+	unsigned char buf[1];
+	buf[0] = 0;
+	
+// gaussian filter
+	for (j=1;j<height-1;j++)
+	{
+	for (i=0;i<width-1;i++)
+	{
+		gau = convolution(gkernel,i,j)/16;
+		I[j][i] = gau;
+	}
+	}
+
+// sobel edge detection
+
+
+	for (i=0;i<640;i++)
+	{
+		fwrite(&buf, 3, 1, fo);
+	}
+
+
+	for (j=1;j<height-1;j++)
+	{
+	fwrite(&buf, 3, 1, fo);
+	for (i=0;i<width-1;i++)
+	{
+		//gau = convolution(gkernel,i,j)/16;
+
+		gx = convolution(xkernel,i,j);
+		gy = convolution(ykernel,i,j);
+		II[j][i] = abs(gx)+abs(gy);
+		memset(pixel, abs(gx)+abs(gy) , sizeof(pixel));
+		fwrite(&pixel, 3, 1, fo);
+	}
+        fread(pixel, padding, 1, fp);
+        //fwrite(pixel, padding, 1, fo);
+	}
+    fclose(fp);
+    fclose(fo);
+
+}
+
+
+int main(){
+	double time = clock();
+    FILE *fIn = fopen("/home/kenny/Desktop/data/1.bmp", "rb");
+    FILE *fOut = fopen("/home/kenny/Desktop/data/gray1.bmp", "wb");
+	FILE *fd = fopen("/home/kenny/Desktop/data/raw.txt","wb");
+    if (!fIn || !fOut)
+    {
+        printf("File error.\n");
+        return 0;
+    }
+
+    unsigned char header[54];
+    fread(header, sizeof(unsigned char), 54, fIn);
+    fwrite(header, sizeof(unsigned char), 54, fOut);
+
+    int width = *(int*)&header[18];
+    int height = abs(*(int*)&header[22]);
+    int stride = (width * 3 + 3) & ~3;
+    int padding = stride - width * 3;
+
+    printf("width: %d (%d)\n", width, width * 3);
+    printf("height: %d\n", height);
+	printf("stride: %d\n",stride);
+	printf("padding: %d\n",padding);
+	//unsigned int I[width][height];
+    unsigned char pixel[3];
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            fread(pixel, 3, 1, fIn);
+            unsigned char gray = pixel[0] * 0.3 + pixel[1] * 0.58 + pixel[2] * 0.11;
+	    	I[y][x] = gray;
+			fprintf(fd,"%d ",gray);
+            memset(pixel, gray, sizeof(pixel));
+            fwrite(&pixel, 3, 1, fOut);
+        }
+		fprintf(fd,"\r\n");
+        fread(pixel, padding, 1, fIn);
+        fwrite(pixel, padding, 1, fOut);
+    }
+    fclose(fOut);
+    fclose(fIn);
+	fclose(fd);
+    sobel();
+	canny();
+	double T = endtime-time;
+	double endtime();
+	printf("executed time = %f",T);
+    return 0;
+}
+
+            fwrite(&pixel, 3, 1, fOut);
+        }
+		fprintf(fd,"\r\n");
+        fread(pixel, padding, 1, fIn);
+        fwrite(pixel, padding, 1, fOut);
+    }
+    fclose(fOut);
+    fclose(fIn);
+	fclose(fd);
+    sobel();
+	canny();
+	double T = endtime-time;
+	double endtime();
+	printf("executed time = %f",T);
+    return 0;
+}
