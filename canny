@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 unsigned char I[480][640]; // temporary image storage 1
 unsigned char II[480][640]; // temporary image storage 2
@@ -189,7 +188,6 @@ void sobel(){
 
 
 int main(){
-	double time = clock();
     FILE *fIn = fopen("/home/kenny/Desktop/data/1.bmp", "rb");
     FILE *fOut = fopen("/home/kenny/Desktop/data/gray1.bmp", "wb");
 	FILE *fd = fopen("/home/kenny/Desktop/data/raw.txt","wb");
@@ -234,8 +232,5 @@ int main(){
 	fclose(fd);
     sobel();
 	canny();
-	double T = endtime-time;
-	double endtime();
-	printf("executed time = %f",T);
     return 0;
 }
