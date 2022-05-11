@@ -1,2 +1,0 @@
-# Kenny-cannny-edge-detection
-:)
